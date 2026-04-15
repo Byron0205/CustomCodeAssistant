@@ -1,0 +1,116 @@
+# ============================================================================
+# PYTHON
+# ============================================================================
+
+# Bytecode compilado y optimizado
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribuciones
+*.egg-info/
+dist/
+build/
+
+# Entornos virtuales
+venv/
+env/
+ENV/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+
+# ============================================================================
+# PROYECTO RAG - ARCHIVOS GENERADOS (NO VERSIONEAR)
+# ============================================================================
+
+# Base de datos vectorial (generada por indexar.py)
+chroma_db/
+
+# Métricas y evaluaciones (generadas por evaluar.py)
+metrics/
+*.jsonl
+evaluations.jsonl
+stats.json
+
+# Documentos temporales o de prueba
+docs/*.tmp
+docs/*.bak
+docs/*_old.*
+
+
+# ============================================================================
+# VARIABLES DE ENTORNO Y SECRETOS
+# ============================================================================
+
+.env
+.env.local
+.env.*.local
+secrets/
+*.key
+*.pem
+
+
+# ============================================================================
+# ARCHIVOS DEL SISTEMA
+# ============================================================================
+
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+
+# ============================================================================
+# ARCHIVOS TEMPORALES Y DE LOG
+# ============================================================================
+
+*.log
+*.tmp
+*.bak
+*.orig
+*.swp
+*.swo
+*~
+.~*
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IPython
+.ipython/
+.jupyter/
+
+
+# ============================================================================
+# EDITOR Y SISTEMA
+# ============================================================================
+
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.project
+.pydevproject
+.settings/
+
+
+# ============================================================================
+# ARCHIVOS ESPECÍFICOS DEL PROYECTO (TEMPORAL)
+# ============================================================================
+
+# Descomentar si necesitas ignorar versiones locales de configuración
+# config.local.py
+# settings.local.json
