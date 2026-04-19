@@ -6,12 +6,14 @@ name = "pypi"
 [packages]
 langchain = "*"
 langchain-community = "*"
+langchain-chroma = "*"
 chromadb = "*"
 ollama = "*"
 langchain-text-splitters = "*"
 pypdf = "*"
 unstructured = "*"
 langchain-ollama = "*"
+rich = "*"
 
 [dev-packages]
 

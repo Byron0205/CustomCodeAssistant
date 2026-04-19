@@ -1,45 +1,42 @@
-import os
-from langchain_community.document_loaders import DirectoryLoader, TextLoader
-from langchain_community.document_loaders import PyPDFLoader
+#!/usr/bin/env python3
+"""
+Entry point: Indexación de documentos.
+Delega la lógica a src/rag/loader.py
+"""
+
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_ollama import OllamaEmbeddings
-from langchain_community.vectorstores import Chroma
+from langchain_chroma import Chroma
 
-#config
-DOCS_PATH = './docs'
-CHROMA_PATH = './chroma_db'
-EMBED_MODEL = 'nomic-embed-text'
+from src.config import (
+    CHROMA_PATH, EMBED_MODEL, CHUNK_SIZE, CHUNK_OVERLAP
+)
+from src.rag.loader import load_all_documents
 
-def indexar():
-    #1. cargar documentos
-    loaders = [
-        DirectoryLoader(DOCS_PATH,glob='**/*.md', loader_cls=TextLoader),
-        DirectoryLoader(DOCS_PATH,glob='**/*.txt', loader_cls=TextLoader),
-        DirectoryLoader(DOCS_PATH,glob='**/*.py', loader_cls=TextLoader)
-    ]
-    docs = []
-    for loader in loaders:
-        docs.extend(loader.load())
 
-    print(f'documentos cargados: {len(docs)}')
+def main():
+    print("[>>] Cargando documentos...")
+    docs = load_all_documents()
+    print(f"[OK] Documentos cargados: {len(docs)}")
 
-    #2 dividir documentos
+    print("[>>] Dividiendo en chunks...")
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=800,
-        chunk_overlap=100,
+        chunk_size=CHUNK_SIZE,
+        chunk_overlap=CHUNK_OVERLAP,
         separators=['\n\n', '\n', ' ', '']
     )
     chunks = splitter.split_documents(docs)
-    print(f'chunks generados: {len(chunks)}')
+    print(f"[OK] Chunks generados: {len(chunks)}")
 
-    #3. Crear embeddings y guardar en ChromaDB
-    embeddings= OllamaEmbeddings(model=EMBED_MODEL)
+    print("[>>] Generando embeddings...")
+    embeddings = OllamaEmbeddings(model=EMBED_MODEL)
     vectorstore = Chroma.from_documents(
         documents=chunks,
         embedding=embeddings,
         persist_directory=CHROMA_PATH
     )
-    print(f'Indexacion completa. Base de datos guardada en: {CHROMA_PATH}')
+    print(f"[OK] Indexacion completa. Base de datos guardada en: {CHROMA_PATH}")
+
 
 if __name__ == "__main__":
-    indexar()
+    main()

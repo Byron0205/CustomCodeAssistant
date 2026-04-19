@@ -34,16 +34,11 @@ ENV/
 # Base de datos vectorial (generada por indexar.py)
 chroma_db/
 
-# Métricas y evaluaciones (generadas por evaluar.py)
-metrics/
-*.jsonl
-evaluations.jsonl
-stats.json
+# Datos generados (métricas, evaluaciones, vectorstore temporales, etc)
+data/
 
 # Documentos temporales o de prueba
-docs/*.tmp
-docs/*.bak
-docs/*_old.*
+docs/
 
 
 # ============================================================================

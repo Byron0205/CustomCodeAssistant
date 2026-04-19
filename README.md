@@ -70,15 +70,27 @@ Verifica que esté corriendo antes de usar cualquier script.
 
 ```
 .
-├── indexar.py           # Script de indexación
-├── consultar.py         # Script de consulta interactivo
-├── evaluar.py           # Script de evaluación de métricas (NEW)
-├── docs/                # Documentos fuente (a indexar)
-│   └── CLAUDE.md       # Documentación del proyecto
-├── chroma_db/           # Base de datos vectorial (generada)
-├── metrics/             # Métricas y evaluaciones (generado)
-├── Pipfile             # Dependencias del proyecto
-└── README.md           # Este archivo
+├── src/                         # Código fuente (arquitectura modular)
+│   ├── config.py               # Configuración centralizada
+│   ├── rag/
+│   │   ├── chain.py            # Lógica RAG (embeddings, vectorstore, LLM)
+│   │   └── loader.py           # Carga documentos (.md, .txt, .py, .pdf)
+│   ├── metrics/
+│   │   ├── evaluator.py        # Evaluación de métricas
+│   │   └── progress.py         # Visualización de progreso
+│   └── utils/
+│       ├── spinner.py          # Indicador de progreso
+│       └── markdown_formatter.py # Formateador de respuestas
+├── indexar.py                   # Entry point: indexación
+├── consultar.py                 # Entry point: chat interactivo
+├── evaluar.py                   # Entry point: evaluación
+├── ver_progreso.py              # Entry point: visualizar métricas
+├── docs/                        # Documentos fuente (a indexar)
+├── chroma_db/                   # Base de datos vectorial (generada)
+├── data/
+│   └── metrics/                 # Métricas y evaluaciones (generado)
+├── Pipfile                      # Dependencias del proyecto
+└── README.md                    # Este archivo
 ```
 
 ---
@@ -125,7 +137,7 @@ El proyecto incluye un sistema de evaluación para medir y trackear el rendimien
 - **Latencia**: Tiempo de respuesta del sistema
 - **Coverage**: Documentos que se utilizan en las respuestas
 
-Las métricas se guardan en `./metrics/` para tracking histórico.
+Las métricas se guardan en `./data/metrics/` para tracking histórico.
 
 ---
 
@@ -137,8 +149,8 @@ Las métricas se guardan en `./metrics/` para tracking histórico.
 3. Ejecuta: pipenv run python consultar.py
 4. Haz preguntas y prueba respuestas
 5. Ejecuta: pipenv run python evaluar.py
-6. Revisa métricas en metrics/
-7. Ajusta parámetros si es necesario
+6. Revisa métricas en data/metrics/
+7. Ajusta parámetros en src/config.py si es necesario
 8. Repite
 ```
 
@@ -146,13 +158,31 @@ Las métricas se guardan en `./metrics/` para tracking histórico.
 
 ## 🎛️ Parámetros Ajustables
 
-Puedes mejorar el rendimiento del RAG ajustando:
+Puedes mejorar el rendimiento del RAG ajustando en `src/config.py`:
 
-- **`k` (chunks recuperados)**: Actualmente 5. Prueba 3-10 según precisión deseada
-- **Tamaño de chunks**: Actualmente 800 tokens. Prueba 512-1024
-- **Solapamiento**: Actualmente 100 tokens. Prueba 50-200
-- **Temperatura del LLM**: Controla creatividad vs. determinismo (0.0-1.0)
-- **Modelo del LLM**: Prueba modelos más grandes si recursos lo permiten
+- **`RETRIEVER_K`**: Chunks recuperados. Actualmente 5. Prueba 3-10 según precisión deseada
+- **`CHUNK_SIZE`**: Tamaño de chunks. Actualmente 800 tokens. Prueba 512-1024
+- **`CHUNK_OVERLAP`**: Solapamiento. Actualmente 100 tokens. Prueba 50-200
+- **Temperatura del LLM**: En `src/rag/chain.py`. Controla creatividad vs. determinismo (0.0-1.0)
+- **`LLM_MODEL`**: Prueba modelos más grandes si recursos lo permiten
+
+---
+
+## 🏛️ Arquitectura del Código
+
+El proyecto está organizado de forma modular y escalable:
+
+- **`src/config.py`**: Configuración centralizada (ÚNICA fuente de verdad)
+- **`src/rag/`**: Lógica RAG (carga documentos, construye chains)
+- **`src/metrics/`**: Sistema de evaluación y visualización
+- **`src/utils/`**: Utilidades (spinner, formateador de markdown)
+- **Entry points** (`consultar.py`, `indexar.py`, etc.): Wrappers delgados que delegan a `src/`
+
+Esto permite:
+- ✅ Fácil reutilización de código
+- ✅ Configuración centralizada (cambios en un solo lugar)
+- ✅ Escalabilidad (agregar nuevos features sin duplicar lógica)
+- ✅ Mantenimiento simplificado
 
 ---
 
@@ -162,6 +192,7 @@ Puedes mejorar el rendimiento del RAG ajustando:
 - **Privacidad**: Todo se procesa en tu máquina, sin datos en la nube
 - **Velocidad**: La primera indexación puede ser lenta; consultas posteriores son rápidas
 - **Modelos**: Los modelos se descargan automáticamente la primera vez que se usan
+- **Refactor**: Código refactorizado a arquitectura modular (2026-04-19)
 
 ---
 
@@ -176,4 +207,4 @@ Puedes mejorar el rendimiento del RAG ajustando:
 
 ---
 
-**Última actualización**: 2026-04-14
+**Última actualización**: 2026-04-19 (refactor a arquitectura modular con `src/`)
