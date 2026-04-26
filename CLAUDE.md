@@ -8,35 +8,72 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Activar el entorno virtual (pipenv)
 pipenv shell
 
-# Indexar documentos (poblar ChromaDB)
+# Indexar documentos (poblar ChromaDB) — correr cada vez que cambien docs/
 pipenv run python indexar.py
 
 # Iniciar el chat RAG interactivo
 pipenv run python consultar.py
 
+# Evaluar métricas del RAG (REPL interactivo)
+pipenv run python evaluar.py
+
+# Ver progreso y estadísticas de evaluaciones
+pipenv run python ver_progreso.py
+
 # Instalar dependencias
 pipenv install
 ```
 
-Ollama debe estar corriendo localmente antes de ejecutar cualquiera de los dos scripts. Los modelos requeridos son `nomic-embed-text` (embeddings) y `qwen2.5-coder:3b` (LLM).
+Ollama debe estar corriendo localmente antes de ejecutar cualquiera de los scripts. Los modelos requeridos son `nomic-embed-text` (embeddings) y `mistral:7b` (LLM, configurable en `src/config.py`).
 
 ## Arquitectura
 
-El proyecto es un sistema RAG (Retrieval-Augmented Generation) local con dos etapas separadas:
+El proyecto es un sistema RAG (Retrieval-Augmented Generation) local. Los entry points (`consultar.py`, `indexar.py`, `evaluar.py`, `ver_progreso.py`) son wrappers delgados que delegan toda la lógica a `src/`.
 
-### 1. Indexación (`indexar.py`)
-Carga documentos desde `./docs/` (`.md`, `.txt`, `.py`), los divide en chunks de 800 tokens con solapamiento de 100, genera embeddings con `nomic-embed-text` vía Ollama y los persiste en ChromaDB (`./chroma_db/`). Hay que correr este script cada vez que se agreguen o modifiquen documentos en `./docs/`.
+### Flujo de datos
 
-### 2. Consulta (`consultar.py`)
-Carga el vectorstore desde `./chroma_db/`, construye una cadena `RetrievalQA` con `qwen2.5-coder:3b` como LLM y expone un REPL interactivo. Recupera los 5 chunks más relevantes (`k=5`) por consulta y muestra las fuentes usadas en cada respuesta.
+**Indexación** (`indexar.py` → `src/rag/loader.py`): carga `.md`, `.txt`, `.py`, `.pdf` desde `./docs/`, divide en chunks de 800 tokens (solapamiento 100), genera embeddings con `nomic-embed-text` y persiste en ChromaDB (`./chroma_db/`).
 
-### Paquetes clave
-- `langchain-ollama` — `OllamaEmbeddings` y `OllamaLLM`. **No usar** las versiones de `langchain_community` (deprecadas desde 0.3.1)
-- `langchain-community` — loaders (`DirectoryLoader`, `PyPDFLoader`), vectorstore (`Chroma`)
-- `langchain-classic` — chains y prompts de la API clásica (`RetrievalQA`, `PromptTemplate`). **No usar `langchain.chains` ni `langchain.prompts`** directamente; en LangChain v1.x esos módulos fueron movidos a `langchain-classic`.
-- `langchain-text-splitters` — `RecursiveCharacterTextSplitter`
-- `chromadb` — base de datos vectorial local
+**Consulta** (`consultar.py` → `src/rag/chain.py`): carga el vectorstore, construye una `RetrievalQA` chain con el LLM y el prompt del modo activo, recupera 5 chunks por consulta (`RETRIEVER_K`).
 
-### Directorios de datos
+### Selector de modos
+
+`consultar.py` mantiene un `current_mode` en memoria. Al cambiar con `/mode <nombre>`, llama `build_chain(mode)` que reconstruye solo la chain (sin recargar embeddings ni vectorstore).
+
+Los modos están definidos en `src/config.py` como `RAG_MODES` (dict). Cada modo tiene `description` y `prompt_template` con variables `{context}` y `{question}`. Para agregar un modo nuevo, solo se agrega una entrada al dict — no hay más cambios necesarios.
+
+Modos actuales: `default` (programación general), `jira` (redacción de tareas), `code` (análisis y depuración).
+
+### Fuente de verdad de configuración
+
+`src/config.py` es la única fuente de verdad: rutas, modelos (`LLM_MODEL`, `EMBED_MODEL`), parámetros RAG (`RETRIEVER_K`, `CHUNK_SIZE`, `CHUNK_OVERLAP`), prompts (`RAG_MODES`, `RAG_PROMPT_TEMPLATE`), y paths de métricas (`EVALUATIONS_FILE`, `STATS_FILE`).
+
+### Métricas
+
+`evaluar.py` invoca el RAG sobre preguntas predefinidas o personalizadas, pide al usuario calificar calidad y relevancia (1-5), y guarda los resultados en `./data/metrics/evaluations.jsonl`. `ver_progreso.py` lee ese archivo y genera reportes (latencia, cobertura, tendencia de calidad).
+
+## Paquetes clave y restricciones
+
+- `langchain-ollama` — `OllamaEmbeddings` y `OllamaLLM`. **No usar** las versiones de `langchain_community` (deprecadas desde 0.3.1).
+- `langchain-classic` — `RetrievalQA` y `PromptTemplate`. **No usar** `langchain.chains` ni `langchain.prompts` directamente; esos módulos fueron movidos a `langchain-classic`.
+- `langchain-chroma` — `Chroma` vectorstore (no el de `langchain_community`).
+- `langchain-community` — solo para loaders (`DirectoryLoader`, `PyPDFLoader`).
+
+## Chat interactivo — comandos y keybindings
+
+Dentro de `consultar.py`:
+
+| Input | Acción |
+|-------|--------|
+| `Enter` | Envía la pregunta |
+| `Alt+Enter` | Inserta salto de línea (permite pegar bloques de código) |
+| `/mode <nombre>` | Cambia el modo del asistente y reconstruye el chain |
+| `/modes` | Lista modos disponibles con descripción |
+| `/help` | Muestra ayuda de comandos |
+| `/salir` | Termina la sesión |
+
+## Directorios de datos
+
 - `./docs/` — documentos fuente a indexar (ignorados por git excepto `docs/CLAUDE.md`)
 - `./chroma_db/` — base de datos vectorial persistida (generada por `indexar.py`)
+- `./data/metrics/` — evaluaciones en JSONL y estadísticas en JSON (generados)

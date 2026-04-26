@@ -8,6 +8,15 @@ import time
 from threading import Thread
 
 
+def format_elapsed(seconds: float) -> str:
+    """Formatea segundos como '12.3s' o '2m 15.3s' cuando supera 60s."""
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    minutes = int(seconds // 60)
+    secs = seconds - minutes * 60
+    return f"{minutes}m {secs:.1f}s"
+
+
 class Spinner:
     """Spinner simple que muestra animación y contador de tiempo."""
 
@@ -18,6 +27,7 @@ class Spinner:
         self.running = False
         self.thread = None
         self.start_time = None
+        self.elapsed = 0.0
 
     def start(self):
         """Inicia el spinner."""
@@ -27,10 +37,12 @@ class Spinner:
         self.thread.start()
 
     def stop(self):
-        """Detiene el spinner."""
+        """Detiene el spinner y guarda el tiempo transcurrido en self.elapsed."""
         self.running = False
         if self.thread:
             self.thread.join()
+        if self.start_time is not None:
+            self.elapsed = time.time() - self.start_time
         sys.stdout.write('\r' + ' ' * (len(self.message) + 20) + '\r')
         sys.stdout.flush()
 

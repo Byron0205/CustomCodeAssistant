@@ -15,15 +15,19 @@ from src.config import (
     LLM_MODEL,
     OLLAMA_BASE_URL,
     RETRIEVER_K,
-    RAG_PROMPT_TEMPLATE,
+    RAG_MODES,
+    DEFAULT_MODE,
 )
 
 
-def build_chain():
+def build_chain(mode: str = DEFAULT_MODE):
     """
     Construye y retorna la cadena RetrievalQA completa.
     Consolida: embeddings + vectorstore + LLM + prompt + retriever
     """
+    if mode not in RAG_MODES:
+        raise ValueError(f"Modo desconocido: '{mode}'. Usa /modes para ver los disponibles.")
+
     try:
         embeddings = OllamaEmbeddings(
             model=EMBED_MODEL,
@@ -42,7 +46,7 @@ def build_chain():
         )
 
         prompt = PromptTemplate(
-            template=RAG_PROMPT_TEMPLATE,
+            template=RAG_MODES[mode]["prompt_template"],
             input_variables=["context", "question"]
         )
 
