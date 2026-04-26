@@ -7,6 +7,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.table import Table
 from rich.text import Text
+from rich import box
 
 
 def parse_markdown_table(lines):
@@ -52,7 +53,7 @@ def parse_markdown_table(lines):
 
 def create_rich_table(header, rows):
     """Crea una tabla Rich con bordes claros."""
-    table = Table(show_header=True, header_style="bold cyan")
+    table = Table(show_header=True, header_style="bold cyan", show_lines=True, box=box.SQUARE)
 
     # Agregar columnas
     for col in header:
