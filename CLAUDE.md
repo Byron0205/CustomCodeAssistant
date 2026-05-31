@@ -42,7 +42,7 @@ El proyecto es un sistema RAG (Retrieval-Augmented Generation) local. Los entry 
 
 Los modos están definidos en `src/config.py` como `RAG_MODES` (dict). Cada modo tiene `description` y `prompt_template` con variables `{context}` y `{question}`. Para agregar un modo nuevo, solo se agrega una entrada al dict — no hay más cambios necesarios.
 
-Modos actuales: `default` (programación general), `jira` (redacción de tareas), `code` (análisis y depuración).
+Modos actuales: `default` (programación general), `jira` (redacción de tareas), `refine` (sanitización y refinamiento de prompts).
 
 ### Fuente de verdad de configuración
 

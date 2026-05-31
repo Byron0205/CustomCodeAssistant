@@ -9,9 +9,9 @@ from prompt_toolkit import prompt
 from prompt_toolkit.key_binding import KeyBindings
 
 from src.rag.chain import build_chain
-from src.utils.spinner import Spinner, format_elapsed
+from src.utils.spinner import Spinner
 from src.utils.markdown_formatter import render_formatted_response
-from src.config import RAG_MODES, DEFAULT_MODE
+from src.config import RAG_MODES, DEFAULT_MODE, LLM_PROVIDER, EMBED_PROVIDER, LLM_MODEL
 
 
 console = Console()
@@ -84,6 +84,7 @@ def handle_command(cmd: str, current_mode: str):
 def main():
     current_mode = DEFAULT_MODE
     print(f'[>>] Cargando RAG... (modo: {current_mode})')
+    print(f'[>>] LLM: {LLM_PROVIDER}/{LLM_MODEL} | Embeddings: {EMBED_PROVIDER}')
     rag = build_chain(current_mode)
     print('[OK] Listo. Comandos: /mode <nombre>, /modes, /help, /salir')
     print('[TIP] Enter envía · Alt+Enter nueva línea\n')
@@ -112,12 +113,8 @@ def main():
 
         spinner.stop()
 
-        console.print(f"\n[Respuesta] [dim](pensó {format_elapsed(spinner.elapsed)})[/dim]")
+        console.print(f"\n[Respuesta]")
         render_formatted_response(console, resultado["result"])
-
-        #fuentes = set(d.metadata.get('source', '?')
-        #              for d in resultado['source_documents'])
-        #console.print(f'[Fuentes: {", ".join(fuentes)}]')
         print("-" * 60)
         print("\n")
 

@@ -5,16 +5,17 @@ Delega la lógica a src/rag/loader.py
 """
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_ollama import OllamaEmbeddings
 from langchain_chroma import Chroma
 
 from src.config import (
-    CHROMA_PATH, EMBED_MODEL, CHUNK_SIZE, CHUNK_OVERLAP
+    CHROMA_PATH, CHUNK_SIZE, CHUNK_OVERLAP, LLM_PROVIDER, EMBED_PROVIDER, EMBED_MODEL
 )
 from src.rag.loader import load_all_documents
+from src.providers import get_embeddings
 
 
 def main():
+    print(f"[>>] Proveedor de embeddings: {EMBED_PROVIDER} ({EMBED_MODEL})")
     print("[>>] Cargando documentos...")
     docs = load_all_documents()
     print(f"[OK] Documentos cargados: {len(docs)}")
@@ -29,13 +30,13 @@ def main():
     print(f"[OK] Chunks generados: {len(chunks)}")
 
     print("[>>] Generando embeddings...")
-    embeddings = OllamaEmbeddings(model=EMBED_MODEL)
+    embeddings = get_embeddings()
     vectorstore = Chroma.from_documents(
         documents=chunks,
         embedding=embeddings,
-        persist_directory=CHROMA_PATH
+        persist_directory=CHROMA_PATH,
     )
-    print(f"[OK] Indexacion completa. Base de datos guardada en: {CHROMA_PATH}")
+    print(f"[OK] Indexación completa. Base de datos guardada en: {CHROMA_PATH}")
 
 
 if __name__ == "__main__":

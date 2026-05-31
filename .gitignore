@@ -1,111 +1,20 @@
-# ============================================================================
-# PYTHON
-# ============================================================================
-
-# Bytecode compilado y optimizado
+# Entorno virtual
+.venv/
 __pycache__/
-*.py[cod]
-*$py.class
+*.pyc
+*.pyo
 
-# Distribuciones
+# Datos generados
+chroma_db/
+data/
+docs/
+!docs/CLAUDE.md
+
+# Configuración sensible
+.env
+
+# Python
 *.egg-info/
 dist/
 build/
-
-# Entornos virtuales
-venv/
-env/
-ENV/
-.venv
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-
-
-# ============================================================================
-# PROYECTO RAG - ARCHIVOS GENERADOS (NO VERSIONEAR)
-# ============================================================================
-
-# Base de datos vectorial (generada por indexar.py)
-chroma_db/
-
-# Datos generados (métricas, evaluaciones, vectorstore temporales, etc)
-data/
-
-# Documentos temporales o de prueba
-docs/
-
-
-# ============================================================================
-# VARIABLES DE ENTORNO Y SECRETOS
-# ============================================================================
-
-.env
-.env.local
-.env.*.local
-secrets/
-*.key
-*.pem
-
-
-# ============================================================================
-# ARCHIVOS DEL SISTEMA
-# ============================================================================
-
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-
-# ============================================================================
-# ARCHIVOS TEMPORALES Y DE LOG
-# ============================================================================
-
-*.log
-*.tmp
-*.bak
-*.orig
-*.swp
-*.swo
-*~
-.~*
-
-# Pytest
 .pytest_cache/
-.coverage
-htmlcov/
-
-# IPython
-.ipython/
-.jupyter/
-
-
-# ============================================================================
-# EDITOR Y SISTEMA
-# ============================================================================
-
-.vscode/
-.idea/
-*.sublime-project
-*.sublime-workspace
-.project
-.pydevproject
-.settings/
-
-
-# ============================================================================
-# ARCHIVOS ESPECÍFICOS DEL PROYECTO (TEMPORAL)
-# ============================================================================
-
-# Descomentar si necesitas ignorar versiones locales de configuración
-# config.local.py
-# settings.local.json

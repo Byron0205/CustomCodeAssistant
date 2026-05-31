@@ -19,11 +19,11 @@ from src.utils.spinner import Spinner
 
 
 EVAL_QUESTIONS = [
-    "¿Cuál es el propósito principal del proyecto?",
-    "¿Qué modelos de Ollama se requieren?",
-    "¿Cuál es el tamaño de los chunks de indexación?",
-    "¿Qué directorios contiene la estructura del proyecto?",
-    "¿Cuántos chunks se recuperan en cada consulta?",
+    """dame un requerimiento para mi pantalla estilo dashboard para control de mis redes sociales con sus estadisticas 2 graficos, KPI generales de ambas redes y tabla con los post mas reciente de cada una respectivamente""",
+    "dame una tabla de traducion en espano, ingles y portugues de los meses del año y dias de la semana",
+    "dame una lista de las principales practicas de clean code",
+    "dame cual es la estructura base de un buen requerimiento",
+    "cuales son las bases para un buen diseno de interfaz de usuario",
 ]
 
 

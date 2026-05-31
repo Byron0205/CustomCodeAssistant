@@ -7,16 +7,6 @@ import sys
 import time
 from threading import Thread
 
-
-def format_elapsed(seconds: float) -> str:
-    """Formatea segundos como '12.3s' o '2m 15.3s' cuando supera 60s."""
-    if seconds < 60:
-        return f"{seconds:.1f}s"
-    minutes = int(seconds // 60)
-    secs = seconds - minutes * 60
-    return f"{minutes}m {secs:.1f}s"
-
-
 class Spinner:
     """Spinner simple que muestra animación y contador de tiempo."""
 
