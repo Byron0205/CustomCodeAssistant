@@ -12,6 +12,23 @@ from src.config import CHROMA_PATH, RETRIEVER_K, RAG_MODES, DEFAULT_MODE, LLM_PR
 from src.providers import get_llm, get_embeddings
 
 
+def load_vectorstore():
+    """
+    Carga el vectorstore sin construir el chain completo.
+    Usar en consultar.py para separar retrieval de generación (streaming).
+    """
+    try:
+        embeddings = get_embeddings()
+        return Chroma(persist_directory=CHROMA_PATH, embedding_function=embeddings)
+    except (ValueError, NotImplementedError) as e:
+        print(f"[ERROR] Configuración de proveedor: {e}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"[ERROR] Error al cargar vectorstore: {e}")
+        print("[!] ¿ChromaDB fue indexado? Ejecuta: pipenv run python indexar.py")
+        sys.exit(1)
+
+
 def build_chain(mode: str = DEFAULT_MODE):
     """
     Construye y retorna la cadena RetrievalQA completa.

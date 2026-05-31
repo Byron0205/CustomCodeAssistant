@@ -90,18 +90,35 @@ OLLAMA_BASE_URL=http://localhost:11434
 
 ---
 
-### Fase 2 — Streaming de respuestas ⬜ (pendiente)
+### Fase 2 — Streaming de respuestas ✅ (completada)
 
 **Objetivo**: mostrar la respuesta del LLM en tiempo real en lugar de esperar la respuesta completa.
 
-**Qué cambiar:**
-- Reemplazar `rag.invoke({'query': ...})` por streaming en `consultar.py`
-- Usar `llm.stream()` o `chain.astream()` de LangChain
-- Reemplazar el spinner de espera por cursor parpadeante con output progresivo
+**Cambios realizados:**
+- `src/rag/chain.py`: nuevo `load_vectorstore()` — carga el vectorstore sin construir el chain completo
+- `consultar.py`: refactor completo del loop principal
+  - Vectorstore + LLM se cargan **una sola vez** al startup (antes se reconstruían en cada query y en cada `/mode`)
+  - Por cada query: retrieve docs → formatear prompt → `llm.stream()` token a token
+  - Indicador `[>>] Recuperando contexto...` durante retrieval; `[>>] Generando...` hasta el primer token
+  - **Fuentes mostradas** al final de cada respuesta (bonus de Fase 4)
+  - **Latencia mostrada** en segundos al final de cada respuesta
+  - `/mode` ya no reconstruye nada — solo cambia el template de prompt en memoria
+- `_chunk_text(chunk)`: helper que normaliza el output de streaming entre providers
+  - Ollama (`OllamaLLM`) → yields `str`
+  - Claude / OpenAI → yields `AIMessageChunk` con `.content`
+- `build_chain()` se mantiene intacto para backward compat con `evaluar.py`
 
-**Consideración**: el streaming funciona diferente por proveedor — Ollama, Claude y OpenAI tienen interfaces de streaming distintas pero LangChain las unifica bajo `BaseLanguageModel.stream()`.
+**UX resultante:**
+```
+──────────────────────────────────────────────────────────────
+[default] >> dame un ejemplo de clean code
 
-**Archivos a modificar**: `consultar.py`, posiblemente `src/rag/chain.py`
+[Respuesta]
+El principio más importante del Clean Code es...   ← tokens aparecen uno a uno
+
+Fuentes: clean-code.md, best-practices.md | 4.2s
+──────────────────────────────────────────────────────────────
+```
 
 ---
 

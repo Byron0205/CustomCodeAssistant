@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 """
 Entry point: Chat interactivo con el RAG.
-Delega la lógica a src/rag/chain.py
+Usa streaming token a token en lugar de esperar la respuesta completa.
 """
+
+import sys
+import time
+from pathlib import Path
 
 from rich.console import Console
 from prompt_toolkit import prompt
 from prompt_toolkit.key_binding import KeyBindings
 
-from src.rag.chain import build_chain
+from src.rag.chain import load_vectorstore
+from src.providers import get_llm
 from src.utils.spinner import Spinner
-from src.utils.markdown_formatter import render_formatted_response
-from src.config import RAG_MODES, DEFAULT_MODE, LLM_PROVIDER, EMBED_PROVIDER, LLM_MODEL
+from src.config import RAG_MODES, DEFAULT_MODE, LLM_PROVIDER, EMBED_PROVIDER, LLM_MODEL, RETRIEVER_K
 
 
 console = Console()
@@ -32,12 +36,19 @@ def _read_input(mode: str):
                   prompt_continuation='   ')
 
 
+def _chunk_text(chunk) -> str:
+    """Extrae texto de un chunk de streaming (string para Ollama, AIMessageChunk para Claude/OpenAI)."""
+    if hasattr(chunk, 'content'):
+        return chunk.content
+    return str(chunk)
+
+
 def handle_command(cmd: str, current_mode: str):
     """
     Procesa comandos /. Retorna (action, value):
-      ("exit",    None)          → salir
-      ("rebuild", nuevo_modo)    → cambiar modo y reconstruir chain
-      ("continue", None)         → comando manejado, seguir el loop
+      ("exit",     None)       → salir
+      ("mode",     nuevo_modo) → cambiar modo (solo swap de prompt, sin rebuild)
+      ("continue", None)       → comando manejado, seguir el loop
     """
     parts = cmd.strip().split()
     name = parts[0].lower()
@@ -57,7 +68,7 @@ def handle_command(cmd: str, current_mode: str):
         if nuevo == current_mode:
             console.print(f"[yellow]Ya estás en el modo '{nuevo}'.[/yellow]")
             return ("continue", None)
-        return ("rebuild", nuevo)
+        return ("mode", nuevo)
 
     if name in ('/modes', '/modos'):
         console.print("\n[bold cyan]Modos disponibles:[/bold cyan]")
@@ -73,7 +84,7 @@ def handle_command(cmd: str, current_mode: str):
   [bold]/mode <nombre>[/bold]   Cambia el modo del asistente
   [bold]/modes[/bold]           Lista todos los modos disponibles
   [bold]/help[/bold]            Muestra esta ayuda
-  [bold]/exit[/bold]           Termina la sesión
+  [bold]/exit[/bold]            Termina la sesión
 """)
         return ("continue", None)
 
@@ -83,11 +94,18 @@ def handle_command(cmd: str, current_mode: str):
 
 def main():
     current_mode = DEFAULT_MODE
-    print(f'[>>] Cargando RAG... (modo: {current_mode})')
-    print(f'[>>] LLM: {LLM_PROVIDER}/{LLM_MODEL} | Embeddings: {EMBED_PROVIDER}')
-    rag = build_chain(current_mode)
-    print('[OK] Listo. Comandos: /mode <nombre>, /modes, /help, /salir')
-    print('[TIP] Enter envía · Alt+Enter nueva línea\n')
+
+    console.print(f"[dim][>>] LLM: {LLM_PROVIDER}/{LLM_MODEL} | Embeddings: {EMBED_PROVIDER}[/dim]")
+
+    spinner = Spinner("Cargando")
+    spinner.start()
+    vectorstore = load_vectorstore()
+    retriever = vectorstore.as_retriever(search_kwargs={"k": RETRIEVER_K})
+    llm = get_llm()
+    spinner.stop()
+
+    console.print(f"[green][OK] Listo.[/green] Modo: [bold]{current_mode}[/bold]")
+    console.print("[dim]Enter envía · Alt+Enter nueva línea · /help para comandos[/dim]\n")
 
     while True:
         print("-" * 60)
@@ -100,23 +118,53 @@ def main():
             action, value = handle_command(pregunta, current_mode)
             if action == "exit":
                 break
-            if action == "rebuild":
+            if action == "mode":
                 current_mode = value
-                rag = build_chain(current_mode)
-                console.print(f"[green][OK] Modo cambiado a: {current_mode}[/green]")
+                console.print(f"[green][OK] Modo: [bold]{current_mode}[/bold][/green]")
             continue
 
-        spinner = Spinner("Pensando")
-        spinner.start()
+        t0 = time.time()
 
-        resultado = rag.invoke({'query': pregunta})
+        # Retrieval — rápido, muestra indicador breve
+        sys.stdout.write('[>>] Recuperando contexto...')
+        sys.stdout.flush()
+        docs = retriever.invoke(pregunta)
+        context = "\n\n".join([doc.page_content for doc in docs])
+        sys.stdout.write('\r' + ' ' * 35 + '\r')
+        sys.stdout.flush()
 
-        spinner.stop()
+        # Formatear prompt con el template del modo activo
+        # str.format() ignora kwargs extra, así que pasar context siempre es seguro
+        prompt_text = RAG_MODES[current_mode]["prompt_template"].format(
+            context=context, question=pregunta
+        )
 
-        console.print(f"\n[Respuesta]")
-        render_formatted_response(console, resultado["result"])
-        print("-" * 60)
-        print("\n")
+        # Streaming — mostrar indicador hasta el primer token
+        console.print("\n[bold cyan][Respuesta][/bold cyan]")
+        sys.stdout.write('[>>] Generando...')
+        sys.stdout.flush()
+
+        first_token = True
+        for chunk in llm.stream(prompt_text):
+            if first_token:
+                sys.stdout.write('\r' + ' ' * 20 + '\r')
+                sys.stdout.flush()
+                first_token = False
+            token = _chunk_text(chunk)
+            print(token, end='', flush=True)
+
+        elapsed = time.time() - t0
+
+        # Fuentes y latencia
+        source_files = sorted(set(
+            Path(doc.metadata.get("source", "desconocido")).name
+            for doc in docs
+        ))
+        sources_str = ', '.join(source_files) if source_files else 'ninguna'
+
+        print()
+        console.print(f"\n[dim]Fuentes: {sources_str} | {elapsed:.1f}s[/dim]")
+        print()
 
 
 if __name__ == '__main__':
