@@ -58,6 +58,27 @@ consultar.py → build_chain(mode) → get_llm() + ChromaDB → RetrievalQA → 
 
 ---
 
+## Resiliencia de Ollama ✅ (completada)
+
+**Archivos:**
+- `src/providers/health.py` — `is_ollama_up`, `installed_models`, `missing_models`, `required_ollama_models`, `start_ollama`, `ensure_ollama`, `preflight`
+- `src/config.py` — `OLLAMA_AUTOSTART` (default true), `OLLAMA_STARTUP_WAIT` (default 15s)
+- `.env.example` — documentadas las dos variables nuevas
+
+**Comportamiento al arrancar:**
+1. `preflight()` hace ping a Ollama → si responde, continúa
+2. Si está caído: lanza `ollama serve` detached (Windows-compatible) y hace polling ~1s hasta `OLLAMA_STARTUP_WAIT` segundos
+3. Valida que los modelos requeridos estén descargados; si falta alguno, avisa con `ollama pull <modelo>`
+4. Si falla todo: loop `Reintentar [r] / Salir [q]` — no crashea
+
+**Integrado en:** `consultar.py`, `indexar.py`, `src/metrics/evaluator.py:load_qa_chain`
+
+**A mitad de sesión:** retrieval y streaming tienen reintento automático (1 vez) tras reconexión; `/reconnect` fuerza reconexión manual sin reiniciar el proceso. `/config` muestra estado de Ollama (activo/caído) en tiempo real.
+
+**Para Claude/OpenAI:** `preflight()` retorna `True` de inmediato — no intenta levantar nada.
+
+---
+
 ## Roadmap
 
 ### Fase 1 — Abstracción de proveedores ✅ (completada)
@@ -122,30 +143,64 @@ Fuentes: clean-code.md, best-practices.md | 4.2s
 
 ---
 
-### Fase 3 — Historial de conversación ⬜ (pendiente)
+### Fase 3 — Chats multi-sesión con historial ✅ (completada)
 
-**Objetivo**: mantener contexto entre preguntas dentro de la sesión.
+**Objetivo**: múltiples chats persistentes con historial de conversación, donde el LLM recuerda los turnos previos del chat activo.
 
-**Qué cambiar:**
-- Agregar `ConversationBufferMemory` o `ConversationSummaryMemory` a `chain.py`
-- Nuevo comando `/clear` para resetear el contexto
-- Nuevo comando `/history` para ver el historial de la sesión actual
-- Decidir cuántos turnos guardar (parámetro `MAX_HISTORY_TURNS` en config)
+**Archivos nuevos:**
+- `src/utils/jsonl.py` — helper `append_jsonl` / `read_jsonl` (centraliza patrón duplicado en métricas)
+- `src/chat/__init__.py` + `src/chat/store.py` — `ChatSession`, `list_chats`, `create_chat`, `load_chat`, `delete_chat`
 
-**Consideración**: con historial activado el prompt crece — importante para modelos con ventana de contexto chica (ej: mistral:7b local). `ConversationSummaryMemory` comprime automáticamente, pero requiere un LLM call extra.
+**Layout de almacenamiento:**
+```
+data/chats/<id>/          # id = timestamp YYYYMMDD-HHMMSS
+  meta.json               # {id, title, mode, created, updated, message_count}
+  messages.jsonl          # append-only — un mensaje por línea
+```
+
+**Optimizaciones de rendimiento/espacio:**
+- `list_chats()` lee solo `meta.json` — no carga mensajes
+- Solo el chat activo vive en RAM
+- Escritura O(1): append-only, nunca reescribe el historial
+- LLM recibe solo los últimos `MAX_HISTORY_TURNS` turnos (default 4) — protege la ventana de contexto de modelos locales
+- El historial completo siempre permanece en disco (nunca se pierde)
+
+**Comandos nuevos:**
+
+| Comando | Descripción |
+|---------|-------------|
+| `/new` | Crea un chat nuevo |
+| `/chats` | Lista todos los chats (tabla Rich) |
+| `/open <n\|id>` | Abre un chat por número o id |
+| `/rename <título>` | Renombra el chat activo |
+| `/delete <n\|id>` | Elimina un chat permanentemente |
+| `/clear` | Limpia el historial del chat activo |
+| `/history` | Muestra los turnos del chat activo |
+
+**Variables de entorno:**
+```env
+MAX_HISTORY_TURNS=4   # turnos enviados al LLM por query (default 4)
+```
+
+**Auto-comportamiento:**
+- Al arrancar: carga el chat más reciente (o crea uno nuevo si no hay ninguno)
+- Título: se genera automáticamente desde la 1ª pregunta del usuario
+- `/mode <nombre>` persiste el modo en el `meta.json` del chat activo
+
+**Portabilidad:** el historial se inyecta como texto en el prompt (`{history}`) — funciona igual en Ollama, Claude y OpenAI sin ramificar por proveedor.
 
 ---
 
-### Fase 4 — UX de consola ⬜ (pendiente)
+### Fase 4 — UX de consola ✅ (completada)
 
 **Objetivo**: mejorar la experiencia en consola sin cambiar la arquitectura.
 
-**Items:**
-- [ ] Mostrar fuentes al final de cada respuesta en `consultar.py` (la chain ya las devuelve, solo falta imprimirlas)
-- [ ] Arreglar `evaluar.py`: usa `qa_chain({"query": ...})` (API vieja) en lugar de `.invoke()`
-- [ ] Comando `/config` para ver proveedor y modelo activos sin salir
-- [ ] Historial de comandos persistent entre sesiones (via `prompt_toolkit` `FileHistory`)
-- [ ] Autocompletado de comandos `/` con `prompt_toolkit` `WordCompleter`
+**Items completados:**
+- [x] Fuentes al final de cada respuesta — completado en Fase 2
+- [x] Arreglar `evaluar.py`: `qa_chain({"query": ...})` → `.invoke({"query": ...})`
+- [x] Comando `/config` — muestra LLM provider/modelo, embed provider/modelo, retriever K, modo activo
+- [x] Historial persistente entre sesiones — `prompt_toolkit.FileHistory` en `data/.rag_history`
+- [x] Autocompletado con Tab — `WordCompleter` ofrece comandos y nombres de modos
 
 ---
 

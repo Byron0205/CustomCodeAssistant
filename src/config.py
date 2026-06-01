@@ -21,6 +21,9 @@ METRICS_DIR.mkdir(parents=True, exist_ok=True)
 EVALUATIONS_FILE = METRICS_DIR / "evaluations.jsonl"
 STATS_FILE = METRICS_DIR / "stats.json"
 
+CHATS_DIR = DATA_DIR / "chats"
+CHATS_DIR.mkdir(parents=True, exist_ok=True)
+
 # Proveedores
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama")
 EMBED_PROVIDER = os.getenv("EMBED_PROVIDER", "ollama")
@@ -41,6 +44,8 @@ EMBED_MODEL = os.getenv("EMBED_MODEL", _EMBED_MODEL_DEFAULTS.get(EMBED_PROVIDER,
 
 # Ollama
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_AUTOSTART = os.getenv("OLLAMA_AUTOSTART", "true").lower() == "true"
+OLLAMA_STARTUP_WAIT = int(os.getenv("OLLAMA_STARTUP_WAIT", "15"))
 
 # API keys (None si no están definidas)
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
@@ -50,6 +55,10 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 RETRIEVER_K = int(os.getenv("RETRIEVER_K", "5"))
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "800"))
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "100"))
+
+# Ventana de historial conversacional enviada al LLM por turno
+# N turnos = N pares usuario/asistente. El historial completo sigue en disco.
+MAX_HISTORY_TURNS = int(os.getenv("MAX_HISTORY_TURNS", "4"))
 
 # Prompt base para RAG
 RAG_PROMPT_TEMPLATE = """
@@ -61,7 +70,7 @@ Responde en espanol salvo que el codigo lo requiera en ingles.
 Contexto:
 {context}
 
-Pregunta: {question}
+{history}Pregunta: {question}
 
 Respuesta:"""
 
@@ -100,7 +109,7 @@ RAG_MODES = {
         Contexto:
         {context}
 
-        Pregunta: {question}
+        {history}Pregunta: {question}
 
         Respuesta:""",
     },

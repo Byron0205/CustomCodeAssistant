@@ -12,10 +12,13 @@ from src.config import (
 )
 from src.rag.loader import load_all_documents
 from src.providers import get_embeddings
+from src.providers.health import preflight
 
 
 def main():
     print(f"[>>] Proveedor de embeddings: {EMBED_PROVIDER} ({EMBED_MODEL})")
+    if not preflight():
+        return
     print("[>>] Cargando documentos...")
     docs = load_all_documents()
     print(f"[OK] Documentos cargados: {len(docs)}")

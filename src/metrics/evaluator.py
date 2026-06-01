@@ -28,7 +28,11 @@ EVAL_QUESTIONS = [
 
 
 def load_qa_chain():
-    """Carga la cadena de RAG."""
+    """Carga la cadena de RAG, con preflight de Ollama si corresponde."""
+    from src.providers.health import preflight
+    if not preflight():
+        raise RuntimeError("Ollama no está disponible. Ejecuta: ollama serve")
+
     spinner = Spinner("Cargando RAG")
     spinner.start()
 
@@ -51,7 +55,7 @@ def evaluate_question(qa_chain, question: str) -> dict:
     start_time = time.time()
 
     try:
-        result = qa_chain({"query": question})
+        result = qa_chain.invoke({"query": question})
         end_time = time.time()
 
         spinner.stop()
