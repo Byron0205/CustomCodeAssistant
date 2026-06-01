@@ -5,8 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Comandos
 
 ```bash
-# Activar el entorno virtual (pipenv)
-pipenv shell
+# Instalar dependencias
+pipenv install
 
 # Indexar documentos (poblar ChromaDB) — correr cada vez que cambien docs/
 pipenv run python indexar.py
@@ -19,61 +19,85 @@ pipenv run python evaluar.py
 
 # Ver progreso y estadísticas de evaluaciones
 pipenv run python ver_progreso.py
-
-# Instalar dependencias
-pipenv install
 ```
 
-Ollama debe estar corriendo localmente antes de ejecutar cualquiera de los scripts. Los modelos requeridos son `nomic-embed-text` (embeddings) y `mistral:7b` (LLM, configurable en `src/config.py`).
+No hay tests automatizados ni linter configurado.
+
+## Prerequisitos de runtime
+
+Cuando `LLM_PROVIDER=ollama` o `EMBED_PROVIDER=ollama` (defaults), Ollama debe estar corriendo. `preflight()` en `src/providers/health.py` lo valida al arrancar cada entry point: hace ping, intenta auto-arrancar `ollama serve` si está caído, y valida que los modelos requeridos (`mistral:7b`, `nomic-embed-text` por defecto) estén descargados.
+
+Para cambiar de proveedor, editar `.env` (copiar desde `.env.example`).
 
 ## Arquitectura
 
-El proyecto es un sistema RAG (Retrieval-Augmented Generation) local. Los entry points (`consultar.py`, `indexar.py`, `evaluar.py`, `ver_progreso.py`) son wrappers delgados que delegan toda la lógica a `src/`.
+Entry points delgados (`consultar.py`, `indexar.py`, `evaluar.py`, `ver_progreso.py`) que delegan toda la lógica a `src/`.
 
-### Flujo de datos
+### Capa de proveedores — `src/providers/`
 
-**Indexación** (`indexar.py` → `src/rag/loader.py`): carga `.md`, `.txt`, `.py`, `.pdf` desde `./docs/`, divide en chunks de 800 tokens (solapamiento 100), genera embeddings con `nomic-embed-text` y persiste en ChromaDB (`./chroma_db/`).
+Factory pattern: `get_llm()` y `get_embeddings()` en `__init__.py` instancian el proveedor activo según `LLM_PROVIDER` / `EMBED_PROVIDER` en `.env`. Proveedores implementados: `ollama.py`, `claude.py`, `openai_provider.py`. Para agregar un proveedor: crear el módulo con `get_llm()` / `get_embeddings()` y agregar el case en `__init__.py`.
 
-**Consulta** (`consultar.py` → `src/rag/chain.py`): carga el vectorstore, construye una `RetrievalQA` chain con el LLM y el prompt del modo activo, recupera 5 chunks por consulta (`RETRIEVER_K`).
+`health.py` maneja resiliencia de Ollama: `is_ollama_up`, `ensure_ollama` (ping → auto-arranque → polling → validación de modelos), `preflight` (wrapper de alto nivel, no-op para proveedores remotos).
 
-### Selector de modos
+### Flujo de consulta — `consultar.py`
 
-`consultar.py` mantiene un `current_mode` en memoria. Al cambiar con `/mode <nombre>`, llama `build_chain(mode)` que reconstruye solo la chain (sin recargar embeddings ni vectorstore).
+Al arrancar: `preflight()` → `load_vectorstore()` → `get_llm()`. Estos se cargan **una sola vez**; `/mode` solo cambia el template de prompt en memoria.
 
-Los modos están definidos en `src/config.py` como `RAG_MODES` (dict). Cada modo tiene `description` y `prompt_template` con variables `{context}` y `{question}`. Para agregar un modo nuevo, solo se agrega una entrada al dict — no hay más cambios necesarios.
+Por turno: `retriever.invoke(query)` → formatear prompt con `{context}` + `{history}` + `{question}` → `llm.stream()` token a token. `_chunk_text(chunk)` normaliza `str` (Ollama) vs `AIMessageChunk` (Claude/OpenAI).
 
-Modos actuales: `default` (programación general), `jira` (redacción de tareas), `refine` (sanitización y refinamiento de prompts).
+Auto-reconexión: ante `ConnectionError` en retrieval o streaming, reintenta una vez tras `ensure_ollama()`.
 
-### Fuente de verdad de configuración
+### Historial de chats — `src/chat/store.py`
 
-`src/config.py` es la única fuente de verdad: rutas, modelos (`LLM_MODEL`, `EMBED_MODEL`), parámetros RAG (`RETRIEVER_K`, `CHUNK_SIZE`, `CHUNK_OVERLAP`), prompts (`RAG_MODES`, `RAG_PROMPT_TEMPLATE`), y paths de métricas (`EVALUATIONS_FILE`, `STATS_FILE`).
+Layout en disco: `data/chats/<YYYYMMDD-HHMMSS>/{meta.json, messages.jsonl}`. `list_chats()` lee solo `meta.json`; el historial completo vive en disco. Al LLM se envían los últimos `MAX_HISTORY_TURNS` turnos como texto plano en `{history}`.
 
-### Métricas
+`ChatSession` es la entidad en memoria: `append(role, content)` escribe append-only al JSONL. `history_block(max_turns)` genera el bloque de texto para el prompt.
 
-`evaluar.py` invoca el RAG sobre preguntas predefinidas o personalizadas, pide al usuario calificar calidad y relevancia (1-5), y guarda los resultados en `./data/metrics/evaluations.jsonl`. `ver_progreso.py` lee ese archivo y genera reportes (latencia, cobertura, tendencia de calidad).
+### Configuración — `src/config.py`
 
-## Paquetes clave y restricciones
+**Única fuente de verdad**: paths, modelos, `RAG_MODES`, parámetros RAG y métricas. Carga `.env` via `python-dotenv`. Modificar aquí; nunca hardcodear valores en otros módulos.
 
-- `langchain-ollama` — `OllamaEmbeddings` y `OllamaLLM`. **No usar** las versiones de `langchain_community` (deprecadas desde 0.3.1).
-- `langchain-classic` — `RetrievalQA` y `PromptTemplate`. **No usar** `langchain.chains` ni `langchain.prompts` directamente; esos módulos fueron movidos a `langchain-classic`.
-- `langchain-chroma` — `Chroma` vectorstore (no el de `langchain_community`).
-- `langchain-community` — solo para loaders (`DirectoryLoader`, `PyPDFLoader`).
+Para agregar un modo: agregar entrada a `RAG_MODES` con `description` y `prompt_template` (variables `{context}`, `{question}`, opcionalmente `{history}`). El modo `refine` no usa `{context}` ni `{history}`.
+
+### Indexación — `indexar.py` + `src/rag/loader.py`
+
+Carga `.md`, `.txt`, `.py`, `.pdf` desde `./docs/`, divide en chunks (`CHUNK_SIZE=800`, `CHUNK_OVERLAP=100`), genera embeddings y persiste en ChromaDB (`./chroma_db/`). Correr de nuevo cuando cambien los documentos.
+
+## Paquetes clave y restricciones de imports
+
+| Paquete | Uso | Restricción |
+|---|---|---|
+| `langchain-ollama` | `OllamaLLM`, `OllamaEmbeddings` | **No** usar `langchain_community` (deprecado desde 0.3.1) |
+| `langchain-classic` | `RetrievalQA`, `PromptTemplate` | **No** usar `langchain.chains` / `langchain.prompts` directamente |
+| `langchain-chroma` | `Chroma` vectorstore | **No** usar el de `langchain_community` |
+| `langchain-community` | Solo loaders (`DirectoryLoader`, `PyPDFLoader`) | — |
+| `langchain-anthropic` | `ChatAnthropic` | — |
+| `langchain-openai` | `ChatOpenAI`, `OpenAIEmbeddings` | — |
 
 ## Chat interactivo — comandos y keybindings
 
-Dentro de `consultar.py`:
-
 | Input | Acción |
-|-------|--------|
+|---|---|
 | `Enter` | Envía la pregunta |
-| `Alt+Enter` | Inserta salto de línea (permite pegar bloques de código) |
-| `/mode <nombre>` | Cambia el modo del asistente y reconstruye el chain |
-| `/modes` | Lista modos disponibles con descripción |
-| `/help` | Muestra ayuda de comandos |
-| `/salir` | Termina la sesión |
+| `Alt+Enter` | Inserta salto de línea |
+| `/mode <nombre>` | Cambia el modo (solo swapea prompt template) |
+| `/modes` | Lista modos disponibles |
+| `/new` | Crea un chat nuevo |
+| `/chats` | Lista todos los chats |
+| `/open <n\|id>` | Abre un chat por número o id |
+| `/rename <título>` | Renombra el chat activo |
+| `/delete <n\|id>` | Elimina un chat permanentemente |
+| `/clear` | Limpia el historial del chat activo |
+| `/history` | Muestra los turnos del chat activo |
+| `/reconnect` | Fuerza reconexión con Ollama sin reiniciar |
+| `/config` | Muestra configuración activa y estado de Ollama |
+| `/help` | Muestra ayuda |
+| `/exit` / `/salir` | Termina la sesión |
 
 ## Directorios de datos
 
-- `./docs/` — documentos fuente a indexar (ignorados por git excepto `docs/CLAUDE.md`)
-- `./chroma_db/` — base de datos vectorial persistida (generada por `indexar.py`)
-- `./data/metrics/` — evaluaciones en JSONL y estadísticas en JSON (generados)
+- `./docs/` — documentos fuente (ignorados por git excepto `docs/CLAUDE.md`)
+- `./chroma_db/` — vectorstore persistido (generado por `indexar.py`)
+- `./data/chats/` — chats multi-sesión en JSONL
+- `./data/metrics/` — evaluaciones y estadísticas
+- `./data/.rag_history` — historial de inputs del REPL entre sesiones

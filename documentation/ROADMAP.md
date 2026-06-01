@@ -257,6 +257,36 @@ Para agregar un nuevo modo: editar `RAG_MODES` en `src/config.py` — no hay má
 
 ---
 
+## Mejoras futuras / deuda técnica
+
+### Seguridad — Confinamiento de rutas en `src/chat/store.py`
+
+**Contexto:** Un security review identificó que `chat_id` proveniente del input del usuario se une directamente a rutas de filesystem sin verificar que el resultado quede dentro de `CHATS_DIR`. Python's `pathlib` no bloquea segmentos `..` durante el join con `/`.
+
+**Riesgo actual:** Bajo (herramienta CLI local de usuario único, sin exposición de red). Sin embargo, si en el futuro el proyecto expone la funcionalidad de chats via API o interfaz multiusuario, esto se convierte en una vulnerabilidad concreta de path traversal que podría permitir leer o eliminar directorios arbitrarios en el sistema.
+
+**Afecta:** `src/chat/store.py` — funciones `_meta_path`, `load_chat`, `delete_chat`.
+
+**Fix recomendado (una línea por función):**
+```python
+def _safe_chat_dir(chat_id: str) -> Path:
+    candidate = (CHATS_DIR / chat_id).resolve()
+    if not candidate.is_relative_to(CHATS_DIR.resolve()):
+        raise ValueError(f"chat_id inválido: '{chat_id}'")
+    return candidate
+```
+O alternativamente, validar el formato del `chat_id` en `_resolve_chat_ref` antes de cualquier operación de filesystem:
+```python
+import re
+if not re.fullmatch(r'[\w-]{1,64}', chat_id):
+    raise ValueError(f"chat_id inválido: '{chat_id}'")
+```
+Los IDs generados por `create_chat` ya usan formato `YYYYMMDD-HHMMSS`, por lo que esta regex bloquea cualquier traversal sin romper el comportamiento existente.
+
+**Prioridad:** Baja hoy — implementar antes de cualquier exposición multiusuario o API.
+
+---
+
 ## Paquetes clave
 
 | Paquete                | Uso                                      | Restricciones                              |
